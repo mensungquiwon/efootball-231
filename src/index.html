@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/app.css">
+    <script src="script/app.js" defer></script>
+    <title>eFootball Liberia</title>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1>🇱🇷 eFootball Liberia</h1>
+        <button id="login-toggle" class="login-toggle" type="button">🔒 Admin</button>
+    </header>
+
+    <nav class="nav-wrap">
+        <button id="menu-toggle" class="menu-toggle" aria-label="Open menu" aria-expanded="false">
+            <span class="hamburger-icon"><span></span><span></span><span></span></span>
+            <span class="menu-toggle-label" id="menu-toggle-label">Standings</span>
+        </button>
+        <div class="tab-bar" id="tab-bar">
+            <button class="tab-btn active" data-tab="standings">Standings</button>
+            <button class="tab-btn" data-tab="matches">Results</button>
+            <button class="tab-btn" data-tab="fixtures">Fixtures</button>
+            <button class="tab-btn admin-only" data-tab="players">Players</button>
+        </div>
+    </nav>
+
+    <div class="round-bar">
+        <span class="live-dot"></span>
+        <span id="matchday-count">0 matches played</span>
+    </div>
+
+    <!-- Admin login (hidden by default, toggled by the lock button above) -->
+    <div class="login-panel" id="login-panel" hidden>
+        <form id="login-form">
+            <label for="admin-password">Admin password</label>
+            <input type="password" id="admin-password" name="admin-password" required>
+            <button type="submit">Log in</button>
+            <p id="login-error" class="form-error" hidden></p>
+        </form>
+    </div>
+
+    <main>
+        <!-- STANDINGS TAB -->
+        <section class="tab-panel" data-panel="standings">
+            <div class="table-wrap">
+                <div class="table-scroll">
+                    <table id="league-table">
+                        <thead>
+                            <tr>
+                                <th class="pos-col">#</th>
+                                <th class="name-col">Player</th>
+                                <th class="form-col">Form</th>
+                                <th>Pts</th>
+                                <th>MP</th>
+                                <th>W</th>
+                                <th>D</th>
+                                <th>L</th>
+                                <th>GF</th>
+                                <th>GA</th>
+                                <th>GD</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- rows rendered by script/app.js -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="empty-state" class="empty-state" hidden>No players yet. Add players in the Players tab to start the table.</p>
+            </div>
+        </section>
+
+        <!-- RESULTS TAB -->
+        <section class="tab-panel" data-panel="matches" hidden>
+            <div class="panel admin-only">
+                <form id="record-match-form">
+                    <h4>Record a match</h4>
+                    <div class="match-row">
+                        <div class="side">
+                            <label for="player-a">Player A</label>
+                            <select id="player-a" name="player-a" required></select>
+                            <input type="number" id="score-a" name="score-a" min="0" placeholder="0" required>
+                        </div>
+                        <span class="vs">vs</span>
+                        <div class="side">
+                            <label for="player-b">Player B</label>
+                            <select id="player-b" name="player-b" required></select>
+                            <input type="number" id="score-b" name="score-b" min="0" placeholder="0" required>
+                        </div>
+                    </div>
+                    <button type="submit">Save result</button>
+                    <p id="match-error" class="form-error" hidden></p>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h3>Results log</h3>
+                <ul id="results-list" class="results-list"></ul>
+                <p id="results-empty" class="empty-state">No matches played yet.</p>
+            </div>
+        </section>
+
+        <!-- FIXTURES TAB -->
+        <section class="tab-panel" data-panel="fixtures" hidden>
+            <div class="panel admin-only">
+                <h3>Fixture generator</h3>
+                <button id="generate-fixtures-btn" type="button">⚡ Generate season fixtures</button>
+            </div>
+
+            <div class="panel">
+                <h3>Upcoming fixtures</h3>
+                <ul id="fixtures-list" class="results-list"></ul>
+                <p id="fixtures-empty" class="empty-state">No upcoming fixtures scheduled.</p>
+            </div>
+        </section>
+
+        <!-- PLAYERS TAB (ADMIN ONLY) -->
+        <section class="tab-panel admin-only" data-panel="players" hidden>
+            <div class="panel">
+                <h3>Add one player</h3>
+                <form id="add-player-form">
+                    <label for="player-name">Player name</label>
+                    <input type="text" id="player-name" name="player-name" placeholder="e.g. Junior" required>
+                    <button type="submit">Add player</button>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h3>Add several at once</h3>
+                <form id="bulk-add-form">
+                    <label for="bulk-names">One name per line (or separate with commas)</label>
+                    <textarea id="bulk-names" name="bulk-names" rows="6" placeholder="Junior&#10;Prince&#10;Emmanuel&#10;..."></textarea>
+                    <button type="submit">Add all</button>
+                    <p id="bulk-summary" class="form-note" hidden></p>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h3>Current roster (<span id="roster-count">0</span>)</h3>
+                <ul id="roster-list" class="roster-list"></ul>
+                <p id="roster-empty" class="empty-state">No players added yet.</p>
+            </div>
+        </section>
+
+        <button id="reset-btn" class="admin-only" type="button">Reset season</button>
+    </main>
+
+</body>
+</html>
