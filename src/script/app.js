@@ -480,64 +480,88 @@ document.getElementById("record-match-form").addEventListener("submit", async (e
   }
 });
 
-// Generates fixtures scheduled across days (max 3 matches per player per day),
-// then hands the finished list to the server in one call.
+// Generates a proper round-robin schedule using the "circle method":
+// one player stays fixed, everyone else rotates around them each
+// round, so every player plays exactly once per round (no one sits
+// idle while someone else plays 6 games in a row). Doubled for a
+// home-and-away double round-robin, then handed to the server in
+// one call.
 document.getElementById("generate-fixtures-btn").addEventListener("click", async () => {
   if (state.players.length < 2) {
     alert("Add at least 2 players to generate fixtures.");
     return;
   }
 
-  const rawPairings = [];
-  for (let i = 0; i < state.players.length; i++) {
-    for (let j = i + 1; j < state.players.length; j++) {
-      const a = state.players[i];
-      const b = state.players[j];
-      const exists = state.matches.some((m) => (m.a === a && m.b === b) || (m.a === b && m.b === a));
-      if (!exists) rawPairings.push({ a, b });
+  let roster = [...state.players];
+  const hasBye = roster.length % 2 !== 0;
+  if (hasBye) roster.push(null); // odd number of players: one sits out each round
+  const n = roster.length;
+  const numRounds = n - 1;
+
+  const legOneRounds = [];
+  let rotating = [...roster];
+  for (let r = 0; r < numRounds; r++) {
+    const pairs = [];
+    for (let i = 0; i < n / 2; i++) {
+      const p1 = rotating[i];
+      const p2 = rotating[n - 1 - i];
+      if (p1 !== null && p2 !== null) pairs.push({ a: p1, b: p2 });
     }
+    legOneRounds.push(pairs);
+    const fixed = rotating[0];
+    const rest = rotating.slice(1);
+    rest.unshift(rest.pop());
+    rotating = [fixed, ...rest];
   }
 
-  if (rawPairings.length === 0) {
-    alert("All possible fixtures have already been created!");
+  // Leg two: same pairings, reversed — the away/return fixtures.
+  const legTwoRounds = legOneRounds.map((round) => round.map((p) => ({ a: p.b, b: p.a })));
+  const allRounds = [...legOneRounds, ...legTwoRounds];
+
+  // Skip any exact directed pairing (this specific home/away order)
+  // that's already scheduled or played, in case Generate gets clicked twice.
+  const existing = new Set(state.matches.map((m) => `${m.a}|${m.b}`));
+
+  // The whole season has to fit between today and "Sunday next week" —
+  // i.e. not this coming Sunday, but the one after it.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilThisSunday = (7 - today.getDay()) % 7;
+  const thisSunday = new Date(today);
+  thisSunday.setDate(today.getDate() + daysUntilThisSunday);
+  const seasonEnd = new Date(thisSunday);
+  seasonEnd.setDate(thisSunday.getDate() + 7);
+
+  const availableDays = Math.round((seasonEnd - today) / 86400000) + 1; // inclusive of both ends
+  const roundsPerDay = Math.max(1, Math.ceil(allRounds.length / availableDays));
+
+  const fixtures = [];
+  allRounds.forEach((round, roundIndex) => {
+    const dayOffset = Math.min(Math.floor(roundIndex / roundsPerDay), availableDays - 1);
+    const matchDate = new Date(today);
+    matchDate.setDate(today.getDate() + dayOffset);
+    const dateString = matchDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+    round.forEach((pair) => {
+      const key = `${pair.a}|${pair.b}`;
+      if (existing.has(key)) return;
+      fixtures.push({
+        a: pair.a,
+        b: pair.b,
+        scheduledTime: `Matchday ${roundIndex + 1} · ${dateString}`,
+      });
+    });
+  });
+
+  if (fixtures.length === 0) {
+    alert("All home-and-away fixtures have already been generated!");
     return;
   }
-
-  const baseDate = new Date();
-  baseDate.setDate(baseDate.getDate() + 1); // starts tomorrow
-  const dailyPlayerCount = new Map();
-  const fixtures = [];
-
-  rawPairings.forEach((pair) => {
-    let assigned = false;
-    let offset = 0;
-    while (!assigned) {
-      const keyA = `${offset}-${pair.a}`;
-      const keyB = `${offset}-${pair.b}`;
-      const countA = dailyPlayerCount.get(keyA) || 0;
-      const countB = dailyPlayerCount.get(keyB) || 0;
-
-      if (countA < 3 && countB < 3) {
-        dailyPlayerCount.set(keyA, countA + 1);
-        dailyPlayerCount.set(keyB, countB + 1);
-
-        const matchDate = new Date();
-        matchDate.setDate(baseDate.getDate() + offset);
-        const dateString = matchDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-        const timeSlot = `${16 + countA * 2}:00`;
-
-        fixtures.push({ a: pair.a, b: pair.b, scheduledTime: `${dateString} @ ${timeSlot}` });
-        assigned = true;
-      } else {
-        offset++;
-      }
-    }
-  });
 
   try {
     await fetchJSON("/api/matches/bulk", { method: "POST", body: JSON.stringify({ fixtures }) });
     await refreshAndRender();
-    showToast(`📅 Scheduled ${fixtures.length} fixtures across upcoming days!`);
+    showToast(`📅 Scheduled ${fixtures.length} fixtures across ${allRounds.length} matchdays, ending ${seasonEnd.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}!`);
   } catch (err) {
     alert(err.message);
   }
